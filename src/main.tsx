@@ -3,18 +3,7 @@ import { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { showError } from './alerts';
 
-interface LicenseValidationResponse {
-  valid: boolean;
-  message?: string;
-}
-
-interface CachedLicense {
-  key: string;
-  valid: boolean;
-  timestamp: number;
-  expiresAt: number;
-}
-
+/* ─────────────── Tipagens ─────────────── */
 interface TaskItem {
   cfe: string;
   cfetp: string;
@@ -24,44 +13,38 @@ interface TaskItem {
 }
 
 interface TaskResponse {
-  success: {
-    itens: TaskItem[];
-  };
+  success: { itens: TaskItem[] };
 }
 
+/* ─────────────── Tabela de tarefas ─────────────── */
 function TaskTable({ tasks }: { tasks: TaskItem[] }): JSX.Element {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse border border-gray-300">
         <thead>
           <tr className="bg-gray-100">
-            <th className="border border-gray-300 px-4 py-2 text-left font-semibold">N° Tarefa</th>
-            <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Vencimento</th>
-            <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Nome da Tarefa</th>
+            <th className="border px-4 py-2 font-semibold text-left">N° Tarefa</th>
+            <th className="border px-4 py-2 font-semibold text-left">Vencimento</th>
+            <th className="border px-4 py-2 font-semibold text-left">Nome da Tarefa</th>
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task, index) => (
-            <tr key={task.cfe} className={index % 2 === 1 ? "bg-gray-50" : ""}>
-              <td className="border border-gray-300 px-4 py-2">
-                <a 
-                  href={task.lk} 
-                  data-key={task.cfetp} 
-                  tabIndex={0} 
-                  role="button" 
-                  className="text-blue-600 hover:text-blue-800 underline" 
-                  target="_blank" 
+          {tasks.map((task, i) => (
+            <tr key={task.cfe} className={i % 2 ? 'bg-gray-50' : ''}>
+              <td className="border px-4 py-2">
+                <a
+                  href={task.lk}
+                  tabIndex={0}
+                  role="button"
+                  target="_blank"
                   rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
                 >
                   {task.cfe}
                 </a>
               </td>
-              <td className="border border-gray-300 px-4 py-2 text-red-600 font-semibold">
-                {task.el}
-              </td>
-              <td className="border border-gray-300 px-4 py-2">
-                {task.t}
-              </td>
+              <td className="border px-4 py-2 font-semibold text-red-600">{task.el}</td>
+              <td className="border px-4 py-2">{task.t}</td>
             </tr>
           ))}
         </tbody>
@@ -70,144 +53,137 @@ function TaskTable({ tasks }: { tasks: TaskItem[] }): JSX.Element {
   );
 }
 
-function SLAModal({ tasks, onClose, onRefresh }: { tasks: TaskItem[]; onClose: () => void; onRefresh: () => Promise<void> }): JSX.Element {
-  const [currentTasks, setCurrentTasks] = useState<TaskItem[]>(tasks);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
+/* ─────────────── Modal ─────────────── */
+function SLAModal({
+  tasks,
+  onClose,
+  onRefresh
+}: {
+  tasks: TaskItem[];
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+}): JSX.Element {
+  const [current, setCurrent] = useState<TaskItem[]>(tasks);
+  const [loading, setLoading] = useState(false);
+  const [last, setLast] = useState(new Date());
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      await handleRefresh();
-    }, 30000);
-    return () => clearInterval(interval);
+    const id = setInterval(handleRefresh, 30_000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
-    setCurrentTasks(tasks);
-    setLastUpdate(new Date());
+    setCurrent(tasks);
+    setLast(new Date());
   }, [tasks]);
 
   const handleRefresh = async () => {
-    setIsLoading(true);
-    try {
-      await onRefresh();
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Erro ao atualizar tarefas:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    setLoading(true);
+    await onRefresh();
+    setLast(new Date());
+    setLoading(false);
   };
 
   const handleClose = () => {
-    if (currentTasks.length === 0) {
-      onClose();
-    } else {
-      showError(
-        'Bloqueio de novas solicitações',
-        `Você não pode realizar novas solicitações enquanto houver ${currentTasks.length} tarefa(s) de correção pendente(s). Complete as tarefas ou use o botão de atualizar para verificar o status.`,
-        {
-          duration: 8000,
-          actions: [
-            {
-              label: 'Atualizar Agora',
-              onClick: handleRefresh,
-              style: 'primary'
-            }
-          ]
-        }
-      );
-    }
+    if (current.length === 0) return onClose();
+    showError(
+      'Bloqueio de novas solicitações',
+      `Você ainda tem ${current.length} tarefa(s) pendente(s).`,
+      {
+        duration: 7000,
+        actions: [{ label: 'Atualizar agora', onClick: handleRefresh, style: 'primary' }]
+      }
+    );
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
+  const fmt = (d: Date) =>
+    d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
-    <div 
-      id="sla-modal-overlay" 
-      className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center"
+    <div
+      id="sla-overlay"
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30"
       style={{ zIndex: 94 }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-[70%] max-w-4xl max-h-[80vh] overflow-auto">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">Atenção - Tarefas de Correção</h2>
-          <button 
-            id="sla-modal-close-x" 
-            className={`text-2xl font-bold ${currentTasks.length === 0 ? 'text-gray-400 hover:text-gray-600' : 'text-gray-300 cursor-not-allowed'}`}
+      <div className="bg-white w-[70%] max-w-4xl max-h-[80vh] overflow-auto rounded-lg shadow-xl">
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between border-b p-6">
+          <h2 className="text-2xl font-bold text-gray-800">Atenção – Tarefas de Correção</h2>
+          <button
             onClick={handleClose}
-            title={currentTasks.length > 0 ? 'Não é possível fechar enquanto há tarefas pendentes' : 'Fechar modal'}
+            className={`text-2xl font-bold ${
+              current.length ? 'cursor-not-allowed text-gray-300' : 'text-gray-400 hover:text-gray-600'
+            }`}
+            title={current.length ? 'Feche somente após concluir' : 'Fechar'}
           >
             ×
           </button>
         </div>
-        
-        <div className="flex justify-between items-center px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              Última atualização: {formatTime(lastUpdate)}
-            </span>
-            <span className={`text-sm font-semibold ${currentTasks.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {currentTasks.length > 0 ? `${currentTasks.length} tarefa(s) pendente(s)` : 'Nenhuma tarefa pendente'}
-            </span>
-          </div>
-          <button 
+
+        {/* Barra de status */}
+        <div className="flex items-center justify-between border-b bg-gray-50 px-6 py-3">
+          <span className="text-sm text-gray-600">Última atualização: {fmt(last)}</span>
+          <span
+            className={`text-sm font-semibold ${
+              current.length ? 'text-red-600' : 'text-green-600'
+            }`}
+          >
+            {current.length ? `${current.length} pendente(s)` : 'Nenhuma pendência'}
+          </span>
+          <button
             onClick={handleRefresh}
-            disabled={isLoading}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
-              isLoading 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+            disabled={loading}
+            className={`flex items-center space-x-2 rounded-lg px-4 py-2 font-semibold transition ${
+              loading
+                ? 'cursor-not-allowed bg-gray-300 text-gray-500'
                 : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
             }`}
-            title="Atualizar lista de tarefas"
           >
-            <span className={`${isLoading ? 'animate-spin' : ''}`}>
-              {isLoading ? '🔄' : '🔄'}
-            </span>
-            <span>{isLoading ? 'Atualizando...' : 'Atualizar'}</span>
+            <span className={loading ? 'animate-spin' : ''}>🔄</span>
+            <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
           </button>
         </div>
-        
+
+        {/* Conteúdo */}
         <div className="p-6">
-          {currentTasks.length > 0 ? (
+          {current.length ? (
             <>
-              <p className="text-lg text-gray-700 mb-6">
-                Você possui as seguintes tarefas de correção pendentes:
+              <p className="mb-6 text-lg text-gray-700">
+                Conclua as tarefas abaixo antes de abrir novas solicitações:
               </p>
-              <TaskTable tasks={currentTasks} />
+              <TaskTable tasks={current} />
             </>
           ) : (
-            <div className="text-center py-8">
-              <div className="text-6xl mb-4">✅</div>
-              <h3 className="text-xl font-bold text-green-600 mb-2">Parabéns!</h3>
-              <p className="text-gray-600">Não há tarefas de correção pendentes no momento.</p>
+            <div className="py-8 text-center">
+              <div className="mb-4 text-6xl">✅</div>
+              <h3 className="mb-2 text-xl font-bold text-green-600">Tudo em dia!</h3>
+              <p className="text-gray-600">Não há tarefas de correção pendentes.</p>
             </div>
           )}
         </div>
-        
-        <div className="flex justify-between items-center p-6 border-t border-gray-200">
+
+        {/* Rodapé */}
+        <div className="flex items-center justify-between border-t p-6">
           <p className="text-sm text-gray-600">
-            © 
-            <a 
-              href="https://raw.githubusercontent.com/Juevan/ZeevSLABlocker/refs/heads/main/LICENSE" 
-              target="_blank" 
-              className="text-blue-600 hover:text-blue-800 underline"
+            ©{' '}
+            <a
+              href="https://raw.githubusercontent.com/Juevan/ZeevSLABlocker/main/LICENSE"
+              target="_blank"
+              className="text-blue-600 underline hover:text-blue-800"
             >
               Licença do Projeto
             </a>
           </p>
-          <button 
-            id="sla-modal-close-ok" 
-            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
-              currentTasks.length === 0 
-                ? 'bg-green-600 hover:bg-green-700 text-white' 
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
+          <button
             onClick={handleClose}
-            title={currentTasks.length > 0 ? 'Complete as tarefas antes de fechar' : 'Fechar modal'}
+            disabled={!!current.length}
+            className={`rounded-lg px-6 py-2 font-semibold transition ${
+              current.length
+                ? 'cursor-not-allowed bg-gray-300 text-gray-500'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
           >
-            {currentTasks.length === 0 ? 'OK' : `Pendente (${currentTasks.length})`}
+            {current.length ? `Pendente (${current.length})` : 'OK'}
           </button>
         </div>
       </div>
@@ -215,253 +191,89 @@ function SLAModal({ tasks, onClose, onRefresh }: { tasks: TaskItem[]; onClose: (
   );
 }
 
+/* ─────────────── Utilidades ─────────────── */
 function shouldExecute(): boolean {
-  const pathname = window.location.pathname.toLowerCase();
-  return pathname.includes('/my') && pathname.includes('/services');
+  const p = location.pathname.toLowerCase();
+  return p.includes('/my') && p.includes('/services');
 }
 
-function getLicenseKey(): string | null {
-  if (typeof import.meta !== 'undefined' && import.meta.url) {
-    const url = new URL(import.meta.url);
-    return url.searchParams.get('key');
-  }
-  return null;
+/* Bypass total de licença */
+async function validateLicense(): Promise<boolean> {
+  return true;
 }
 
-function dispatchLicenseInvalidEvent(key: string, error?: string): void {
-  const event = new CustomEvent('licenseInvalid', {
-    detail: {
-      origin: window.location.origin,
-      key,
-      ...(error && { error })
-    }
-  });
-  window.dispatchEvent(event);
-}
-
-const LICENSE_CACHE_DURATION = 24 * 60 * 60 * 1000;
-const licenseCache = new Map<string, CachedLicense>();
-
-function getCachedLicense(key: string): boolean | null {
-  const cached = licenseCache.get(key);
-  if (!cached) return null;
-
-  if (Date.now() > cached.expiresAt) {
-    licenseCache.delete(key);
-    return null;
-  }
-
-  return cached.valid;
-}
-
-function setCachedLicense(key: string, valid: boolean): void {
-  const now = Date.now();
-  const cached: CachedLicense = {
-    key,
-    valid,
-    timestamp: now,
-    expiresAt: now + LICENSE_CACHE_DURATION
-  };
-  licenseCache.set(key, cached);
-}
-
-async function validateLicense(key: string): Promise<boolean> {
-  const cachedResult = getCachedLicense(key);
-  if (cachedResult !== null) {
-    if (!cachedResult) {
-      dispatchLicenseInvalidEvent(key, 'Licença inválida (cache)');
-    }
-    return cachedResult;
-  }
-
-  try {
-    const response = await fetch(`https://validador-web.vercel.app/validate-license?key=${encodeURIComponent(key)}`);
-    const data: LicenseValidationResponse = await response.json();
-
-    setCachedLicense(key, data.valid);
-
-    if (!data.valid) {
-      dispatchLicenseInvalidEvent(key);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-    dispatchLicenseInvalidEvent(key, errorMessage);
-    return false;
-  }
-}
-
+/* Pequeno utilitário para injetar Tailwind compilado (se quiser) */
 function injectStyles(css: string): void {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
 }
 
+/* ─────────────── Busca de tarefas atrasadas (GET) ─────────────── */
 async function verificaAtrasos(): Promise<TaskItem[]> {
-  const tokenElement = document.querySelector('input[name="__RequestVerificationToken"]') as HTMLInputElement;
-  const token = tokenElement?.value;
+  const token = (document.querySelector(
+    'input[name="__RequestVerificationToken"]'
+  ) as HTMLInputElement)?.value;
+  if (!token) return [];
 
-  if (!token) {
-    throw new Error("Token de verificação não encontrado");
-  }
+  const kw = ['corrigir', 'correção', 'correcao', 'ajuste', 'ajustar'];
+  const resultados: TaskItem[] = [];
+  const visto = new Set<string>();
 
-  const keywords = ['corrigir', 'correção', 'correcao', 'ajuste', 'ajustar'];
-  const allTasks: TaskItem[] = [];
-  const taskSet = new Set<string>();
+  for (const palavra of kw) {
+    const url = `${location.origin}/api/internal/bpms/1.0/assignments?status=Late&length=100&keyword=${encodeURIComponent(
+      palavra
+    )}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'RequestVerificationToken': token },
+      credentials: 'include'
+    }).catch(() => null);
 
-  try {
-    const promises = keywords.map(async (keyword) => {
-      let page = 1;
-      const tasks: TaskItem[] = [];
-      const maxPages = 10;
-
-      while (page <= maxPages) {
-        const url = `${window.location.origin}/api/internal/bpms/1.0/assignments?pagenumber=${page}&simulation=N&codreport=Kju5G9GOJbU7cHRcMb%252BRBA%253D%253D&reporttype=mytasks&codflowexecute=&=&codtask=&taskstatus=S&field=&operator=Equal&fieldvaluetext=&fielddatasource=&fieldvalue=&requester=&codrequester=&=&tasklate=Late&startbegin=&startend=&sortfield=dt&sortdirection=ASC&keyword=${encodeURIComponent(keyword)}`;
-
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Accept": "*/*",
-            "Content-Type": "application/json",
-            "x-sml-antiforgerytoken": token
-          },
-          credentials: "include"
-        });
-
-        if (response.ok) {
-          const data: TaskResponse = await response.json();
-          
-          if (data.success?.itens?.length > 0) {
-            tasks.push(...data.success.itens);
-            page++;
-          } else {
-            break;
-          }
-        } else {
-          break;
-        }
-      }
-
-      return tasks;
-    });
-
-    const results = await Promise.all(promises);
-    
-    results.forEach(tasks => {
-      tasks.forEach(task => {
-        if (!taskSet.has(task.cfe)) {
-          taskSet.add(task.cfe);
-          allTasks.push(task);
+    if (res && res.ok) {
+      const json: TaskResponse = await res.json();
+      json.success?.itens?.forEach(t => {
+        if (!visto.has(t.cfe)) {
+          visto.add(t.cfe);
+          resultados.push(t);
         }
       });
-    });
-
-    return allTasks;
-
-  } catch (error) {
-    console.error("Erro na requisição:", error);
-    return [];
+    }
   }
+  return resultados;
 }
 
+/* ─────────────── Monta Modal ─────────────── */
 function createModal(tasks: TaskItem[]): void {
-  if (tasks.length === 0) return;
+  if (!tasks.length) return;
 
-  const existingModal = document.getElementById('sla-modal-container');
-  if (existingModal) {
-    existingModal.remove();
-  }
+  const host = document.createElement('div');
+  host.id = 'sla-modal-host';
+  document.body.appendChild(host);
 
-  const modalContainer = document.createElement('div');
-  modalContainer.id = 'sla-modal-container';
-  modalContainer.style.cssText = `
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    z-index: 94 !important;
-    pointer-events: auto !important;
-    display: block !important;
-  `;
-  
-  document.body.appendChild(modalContainer);
-
-  let currentTasks = [...tasks];
-
-  const closeModal = () => {
-    modalContainer.remove();
+  const close = () => host.remove();
+  const refresh = async () => {
+    const novaLista = await verificaAtrasos();
+    render(<SLAModal tasks={novaLista} onClose={close} onRefresh={refresh} />, host);
   };
 
-  const refreshTasks = async () => {
-    const newTasks = await verificaAtrasos();
-    currentTasks = newTasks;
-    render(
-      <SLAModal tasks={currentTasks} onClose={closeModal} onRefresh={refreshTasks} />,
-      modalContainer
-    );
-  };
-
-  try {
-    render(
-      <SLAModal tasks={currentTasks} onClose={closeModal} onRefresh={refreshTasks} />,
-      modalContainer
-    );
-  } catch (error) {
-    console.error('Erro ao renderizar modal:', error);
-    
-    modalContainer.innerHTML = `
-      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 94;">
-        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 80%; max-height: 80%; overflow: auto;">
-          <h2>SLA Blocker - Atenção</h2>
-          <p>Você possui ${tasks.length} tarefa(s) com SLA expirado:</p>
-          <ul>
-            ${tasks.map(task => `<li>${task.cfe}: ${task.t}</li>`).join('')}
-          </ul>
-          <button onclick="document.getElementById('sla-modal-container').remove()" style="background: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">OK</button>
-        </div>
-      </div>
-    `;
-  }
+  render(<SLAModal tasks={tasks} onClose={close} onRefresh={refresh} />, host);
 }
 
+/* ─────────────── Bootstrap ─────────────── */
 (async () => {
-  try {
-    if (!shouldExecute()) {
-      return;
-    }
-
-    const licenseKey = getLicenseKey();
-    if (!licenseKey) {
-      return;
-    }
-
-    const [isLicenseValid, tasks] = await Promise.all([
-      validateLicense(licenseKey),
-      verificaAtrasos()
-    ]);
-
-    if (!isLicenseValid) {
-      return;
-    }
-
-    if (tasks.length > 0) {
-      injectStyles('__CSS_CONTENT__');
-      createModal(tasks);
-    }
-
-  } catch (error) {
-    console.error('SLA Blocker: Erro crítico:', error);
+  if (!shouldExecute()) return;
+  await validateLicense(); // sempre true
+  const atrasadas = await verificaAtrasos();
+  if (atrasadas.length) {
+    injectStyles('__CSS_CONTENT__'); // opcional
+    createModal(atrasadas);
   }
 })();
 
-export { validateLicense, shouldExecute, verificaAtrasos };
-
+/* ─────────────── Fornece helpers no window (debug) ─────────────── */
 if (typeof window !== 'undefined') {
-  (window as any).validateLicense = validateLicense;
-  (window as any).shouldExecute = shouldExecute;
-  (window as any).verificaAtrasos = verificaAtrasos;
-  (window as any).createModal = createModal;
+  Object.assign(window as any, { shouldExecute, verificaAtrasos, createModal });
 }
+
+export { shouldExecute, verificaAtrasos, validateLicense };
